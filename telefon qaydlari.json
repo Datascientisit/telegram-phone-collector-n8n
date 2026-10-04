@@ -1,0 +1,628 @@
+{
+  "name": "telefon qaydlari",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -2464,
+        -624
+      ],
+      "id": "3472acd7-2520-4288-ad24-2d4a112c8a5f",
+      "name": "Telegram Trigger",
+      "webhookId": "ed8633a0-38fb-4c09-be61-5d0025cb5c72",
+      "credentials": {
+        "telegramApi": {
+          "id": "RE1JyKRU1Jg0sOIv",
+          "name": "telefon raqam qabul qilish"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.item.json.message || {};\nconst text = message.text || '';\nconst contact = message.contact || null;\nconst replyTo = message.reply_to_message || null;\nconst timestamp = $now.setZone('Asia/Tashkent').toFormat('dd.MM.yyyy');\n\n\n// O'zbekiston operator kodlari\nconst validCodes = ['33','88','90','91','93','94','95','97','98','99','20','50'];\n\nfunction normalizePhone(digitsRaw) {\n  const digits = digitsRaw.replace(/\\D/g, '');\n  let nineDigits = null;\n  if (digits.length === 9) {\n    nineDigits = digits;\n  } else if (digits.length === 12 && digits.startsWith('998')) {\n    nineDigits = digits.slice(3);\n  }\n  if (nineDigits && validCodes.includes(nineDigits.slice(0, 2))) {\n    return '+998' + nineDigits;\n  }\n  return null;\n}\n\nfunction isCapitalized(word) {\n  return /^[A-ZА-ЯЁ]/.test(word);\n}\n\n\n\nfunction normalizePhone(digitsRaw) {\n  const digits = digitsRaw.replace(/\\D/g, '');\n\n  // Avval 998 bilan boshlangan holatni tekshiramiz\n  if (digits.length >= 12 && digits.startsWith('998')) {\n    const sub = digits.slice(3, 12);\n    if (validCodes.includes(sub.slice(0, 2))) {\n      return '+998' + sub;\n    }\n  }\n\n  // Keyin, qolgan raqamlar ichidan 9 xonali \"oyna\" (window) qidiramiz\n  for (let i = 0; i <= digits.length - 9; i++) {\n    const sub = digits.slice(i, i + 9);\n    if (validCodes.includes(sub.slice(0, 2))) {\n      return '+998' + sub;\n    }\n  }\n\n  return null;\n}\nfunction extractName(str) {\n  if (!str) return '';\n  const idx = str.search(/raqam/i);\n  if (idx === -1) return '';\n\n  const before = str.slice(0, idx).trim();\n  if (!before) return '';\n\n  const words = before.split(/\\s+/);\n  const last = words[words.length - 1];\n  const isTitleWord = /^(aka|opa)/i.test(last);\n\n  if (isTitleWord && words.length >= 2) {\n    const namePart = words[words.length - 2];\n    if (!isCapitalized(namePart)) return '';\n    return namePart + ' ' + normalizeTitle(last);\n  }\n\n  if (!isCapitalized(last)) return '';\n  return last;\n}\n\n// ============ 1) RAQAMNI TOPISH ============\nlet phoneFound = false;\nlet formattedPhone = '';\nlet rawPhone = null;\nlet source = '';\n\nif (contact && contact.phone_number) {\n  const normalized = normalizePhone(contact.phone_number);\n  if (normalized) {\n    phoneFound = true;\n    formattedPhone = normalized;\n    rawPhone = contact.phone_number;\n    source = 'contact';\n  }\n}\n\nif (!phoneFound && text) {\n  const regex = /\\+?\\d[\\d\\s\\-.()]{6,17}\\d/g;\n  const candidates = text.match(regex) || [];\n  for (const candidate of candidates) {\n    const normalized = normalizePhone(candidate);\n    if (normalized) {\n      phoneFound = true;\n      formattedPhone = normalized;\n      rawPhone = candidate.trim();\n      source = 'text';\n      break;\n    }\n  }\n}\n\n// ============ 2) KIMDAN KELGANI (aniq, Telegram ma'lumoti) ============\nconst senderName = message.from?.first_name || '';\nconst senderUsername = message.from?.username || '';\nconst senderId = message.from?.id || '';\n\n// ============ 3) KIM SO'RADI (aniq, agar reply bo'lsa) ============\nconst isReply = !!replyTo;\nconst askerName = replyTo?.from?.first_name || '';\nconst askerUsername = replyTo?.from?.username || '';\nconst repliedText = replyTo ? (replyTo.text || '') : '';\n\n// ============ 4) RAQAM EGASI (taxminiy, matn tahlili) ============\nlet phoneOwner = '';\nlet ownerSource = '';\n\nif (contact) {\n  phoneOwner = `${contact.first_name || ''} ${contact.last_name || ''}`.trim();\n  ownerSource = 'contact';\n} else if (isReply && repliedText) {\n  const nameFromReply = extractName(repliedText);\n  if (nameFromReply) {\n    phoneOwner = nameFromReply;\n    ownerSource = 'reply_text';\n  }\n}\n\nif (!phoneOwner && text) {\n  const nameFromText = extractName(text);\n  if (nameFromText) {\n    phoneOwner = nameFromText;\n    ownerSource = 'message_text';\n  }\n}\n\nif (!phoneOwner) {\n  phoneOwner = 'Aniqlanmagan';\n  ownerSource = 'unknown';\n}\n\n// ============ NATIJA ============\nreturn {\n  json: {\n    phoneFound,\n    rawPhone,\n    phoneNumber: formattedPhone,\n    source,\n\n    senderName,\n    senderUsername,\n    senderId,\n\n    isReply,\n    askerName,\n    askerUsername,\n    repliedText,\n\n    phoneOwner,\n    ownerSource,\n\n    messageText: text,\n    timestamp,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        -640
+      ],
+      "id": "5d924f57-0cf9-4afb-9fcb-4df19e824603",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "90ab43b2-6df2-46ed-a211-a2728a06d760",
+              "leftValue": "={{ $json.phoneFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1760,
+        -608
+      ],
+      "id": "92451a26-77d8-4ae9-b8be-c46af89f3595",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw",
+          "mode": "list",
+          "cachedResultName": "Customer database for AI agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1737987277,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit#gid=1737987277"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Telefon raqami",
+              "lookupValue": "={{ String($('Code in JavaScript').item.json.phoneNumber).trim() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1616,
+        -736
+      ],
+      "id": "c617ba58-e29e-4c8e-8492-cedc024ef94b",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mIWrXcC54kNvBAaS",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3f455111-b20c-4d5c-874b-94e30393d1a5",
+              "leftValue": "={{ $json['Telefon raqami'] }}",
+              "rightValue": "=0",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1456,
+        -736
+      ],
+      "id": "1cd855f6-2d2e-4881-a8f1-0cad4088947f",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw",
+          "mode": "list",
+          "cachedResultName": "Customer database for AI agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1737987277,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit#gid=1737987277"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Telefon raqami": "={{ $('Code in JavaScript').item.json.phoneNumber }}",
+            "Raqam egasi": "={{ $('Code in JavaScript').item.json.phoneOwner }}",
+            "So‘rovnoma matni": "={{ $('Code in JavaScript').item.json.repliedText }}",
+            "Kim tomonidan yuborildi": "={{ $('Code in JavaScript').item.json.senderName }}",
+            "Telegram User ID": "={{ $('Code in JavaScript').item.json.senderId }}",
+            "Sana": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Telefon raqami",
+              "displayName": "Telefon raqami",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Raqam egasi",
+              "displayName": "Raqam egasi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Kim tomonidan yuborildi",
+              "displayName": "Kim tomonidan yuborildi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sana",
+              "displayName": "Sana",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Telegram User ID",
+              "displayName": "Telegram User ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "So‘rovnoma matni",
+              "displayName": "So‘rovnoma matni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1264,
+        -736
+      ],
+      "id": "4a932f67-668a-47ff-b8b8-028d08519e3c",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mIWrXcC54kNvBAaS",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw",
+          "mode": "list",
+          "cachedResultName": "Customer database for AI agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1737987277,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h2qrcSv2UpH2sKlZ7vCkWrxVmYmx7fjv3withvarryw/edit#gid=1737987277"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Sana": "={{ $('Code in JavaScript').item.json.timestamp }}",
+            "Kim tomonidan yuborildi": "={{ $('Code in JavaScript').item.json.senderName }}",
+            "So‘rovnoma matni": "={{ $('Code in JavaScript').item.json.repliedText }}",
+            "Telegram User ID": "={{ $('Code in JavaScript').item.json.senderId }}",
+            "Telefon raqami": "={{ $('Code in JavaScript').item.json.phoneNumber }}"
+          },
+          "matchingColumns": [
+            "Telefon raqami"
+          ],
+          "schema": [
+            {
+              "id": "Telefon raqami",
+              "displayName": "Telefon raqami",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Raqam egasi",
+              "displayName": "Raqam egasi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Kim tomonidan yuborildi",
+              "displayName": "Kim tomonidan yuborildi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sana",
+              "displayName": "Sana",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Telegram User ID",
+              "displayName": "Telegram User ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "So‘rovnoma matni",
+              "displayName": "So‘rovnoma matni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1264,
+        -560
+      ],
+      "id": "b78a88b6-fbcc-47de-bb57-a715472b7e6d",
+      "name": "Update row in sheet",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mIWrXcC54kNvBAaS",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b9bdac-e927-4552-9108-0cb8877d139c",
+              "leftValue": "={{ !!$json.message?.photo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2320,
+        -640
+      ],
+      "id": "0f06aa44-bd5b-413e-a334-357bb238698d",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2336,
+        -384
+      ],
+      "id": "4cbf37b6-640e-49cf-8421-acc21b6d5309",
+      "name": "Get a file",
+      "webhookId": "4ce5056b-827a-45cb-aa90-145a09f67008",
+      "credentials": {
+        "telegramApi": {
+          "id": "RE1JyKRU1Jg0sOIv",
+          "name": "telefon raqam qabul qilish"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ocr.space/parse/image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "language",
+              "value": "rus"
+            },
+            {
+              "name": "OCREngine",
+              "value": "2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -2208,
+        -384
+      ],
+      "id": "591c770c-7335-4978-a5aa-4411a188f71b",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ocrText = $json.ParsedResults?.[0]?.ParsedText || ''; const originalMessage = $('Telegram Trigger').item.json.message; return { json: { message: { text: ocrText, from: originalMessage.from, reply_to_message: originalMessage.reply_to_message || null } } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2064,
+        -464
+      ],
+      "id": "a59e1ab8-2512-4970-9558-39c606ed9aec",
+      "name": "OCR natijasini tayyorlash"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "OCR natijasini tayyorlash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR natijasini tayyorlash": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "17f13078-426e-491e-9293-01981d6a1f19",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6cc78812b892e32064933e55f3201669875b61eca91448db793f6a41a0010d69"
+  },
+  "nodeGroups": [],
+  "id": "tPuPdbt8r8zEp9JX",
+  "tags": []
+}
